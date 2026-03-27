@@ -1,7 +1,7 @@
 <?php
 
 use App\Http\Controllers\Settings\ProfileController;
-use App\Http\Controllers\Settings\SecurityController;
+use App\Http\Controllers\Settings\PasswordController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware(['auth'])->group(function () {
@@ -14,9 +14,9 @@ Route::middleware(['auth'])->group(function () {
 Route::middleware(['auth', 'verified'])->group(function () {
     Route::delete('settings/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
 
-    Route::get('settings/security', [SecurityController::class, 'edit'])->name('security.edit');
+    Route::get('settings/security', [PasswordController::class, 'edit'])->name('security.edit');
 
-    Route::put('settings/password', [SecurityController::class, 'update'])
+    Route::put('settings/password', [PasswordController::class, 'update'])
         ->middleware('throttle:6,1')
         ->name('user-password.update');
 

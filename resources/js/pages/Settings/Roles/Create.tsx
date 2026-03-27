@@ -2,7 +2,7 @@ import React from 'react';
 import { Head, useForm, router } from '@inertiajs/react';
 import SettingsLayout from '@/layouts/settings/layout';
 import RoleForm from '@/components/Roles/RoleForm';
-import { rolesStore, rolesIndex } from '@/routes';
+import { rolesStore, rolesIndex, rolesCreate } from '@/routes';
 
 interface Props {
     permissions: { id: number; name: string }[];
