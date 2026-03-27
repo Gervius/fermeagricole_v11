@@ -17,6 +17,7 @@ class DatabaseSeeder extends Seeder
             BuildingSeeder::class,
             UnitSeeder::class, // si vous avez un seeder pour les unités
             IngredientSeeder::class,
+            AccountingRuleSeeder::class,
             // Puis les autres données si nécessaires
             // FlockSeeder::class, // (si vous voulez des lots de démo)
         ]);

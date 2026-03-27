@@ -83,9 +83,9 @@ class InvoiceController extends Controller
         return Inertia::render('Invoices/Create', [
             'import' => $import,
             'activeFlocks' => Flock::active()->get(['id', 'name']),
+            // CRUCIAL : On récupère le type pour le filtrage React
             'customers' => Partner::where('is_active', true)
-                                              ->whereIn('type', ['customer', 'both'])
-                                              ->get(['id', 'name']),
+                ->get(['id', 'name', 'type']), 
             'nextInvoiceNumber' => 'FAC-' . date('Ymd') . '-' . str_pad(Invoice::count() + 1, 4, '0', STR_PAD_LEFT)
         ]);
     }
@@ -96,6 +96,7 @@ class InvoiceController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
+            'type' => 'required|in:sale,purchase', // Nouveau champ requis
             'number' => 'required|unique:invoices',
             'partner_id' => 'required|exists:partners,id',
             'date' => 'required|date',
@@ -103,41 +104,31 @@ class InvoiceController extends Controller
             'items.*.description' => 'required|string',
             'items.*.quantity' => 'required|numeric|min:0.1',
             'items.*.unit_price' => 'required|numeric|min:0',
-            'items.*.itemable_id' => 'nullable|integer',
-            'items.*.itemable_type' => 'nullable|string',
         ]);
 
         DB::transaction(function () use ($validated) {
             $subtotal = collect($validated['items'])->sum(fn($i) => $i['quantity'] * $i['unit_price']);
-
-            // Trouver le nom du client via son ID pour la redondance
-            $partner = Partner::find($validated['partner_id']);
+            $partner = Partner::findOrFail($validated['partner_id']);
 
             $invoice = Invoice::create([
+                'type' => $validated['type'], // On enregistre le type (sale/purchase)
                 'number' => $validated['number'],
                 'partner_id' => $validated['partner_id'],
-                'customer_name' => $partner->name, // Conservé pour historique au cas où le partenaire est supprimé
+                'customer_name' => $partner->name,
                 'date' => $validated['date'],
                 'subtotal' => $subtotal,
-                'total' => $subtotal, // Ajoutez ici la logique de taxe si nécessaire
+                'total' => $subtotal,
                 'status' => 'draft',
                 'payment_status' => 'unpaid',
                 'created_by' => auth()->id(),
             ]);
 
             foreach ($validated['items'] as $item) {
-                $invoice->items()->create([
-                    'description' => $item['description'],
-                    'quantity' => $item['quantity'],
-                    'unit_price' => $item['unit_price'],
-                    'total' => $item['quantity'] * $item['unit_price'],
-                    'itemable_id' => $item['itemable_id'],
-                    'itemable_type' => $item['itemable_type'],
-                ]);
+                $invoice->items()->create($item);
             }
         });
 
-        return redirect()->route('invoicesIndex')->with('success', 'Facture enregistrée. En attente de validation.');
+        return redirect()->route('invoicesIndex')->with('success', 'Facture créée avec succès.');
     }
 
     /**

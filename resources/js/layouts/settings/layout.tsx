@@ -10,7 +10,7 @@ import {
     BookOpen, Users, Cookie, Settings as SettingsIcon, ShieldCheck
 } from 'lucide-react';
 import AppLayout from '@/layouts/app-layout';
-import { accountsIndex, buildingsIndex, ingredientsIndex, unitsIndex, usersIndex } from '@/routes';
+import { accountingRulesIndex, accountsIndex, buildingsIndex, ingredientsIndex, unitsIndex, usersIndex } from '@/routes';
 
 interface NavSection {
     title: string;
@@ -39,6 +39,7 @@ const navSections: NavSection[] = [
         title: 'Finance',
         items: [
             { title: 'Plan comptable', href: accountsIndex(), icon: BookOpen },
+            { title: 'Plan comptable', href: accountingRulesIndex(), icon: BookOpen },
         ]
     },
     {

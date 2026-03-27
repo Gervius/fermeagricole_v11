@@ -47,55 +47,64 @@ class Partner extends Model
         return $totalInvoiced - $totalPaid;
     }
 
+    // App\Models\Partner.php
+
     public function getStatement($startDate = null, $endDate = null)
     {
-        $query = DB::table(function ($query) {
-            // Factures (débit client)
-            $query->from('invoices')
-                ->select(
-                    'date',
-                    DB::raw("CONCAT('Facture ', number) as description"),
-                    'total as debit',
-                    DB::raw('0 as credit'),
-                    'total as amount'
-                )
-                ->where('partner_id', $this->id)
-                ->whereNotIn('status', ['draft', 'cancelled']);
-        })->unionAll(
-            // Paiements (crédit client)
-            \DB::table('payments')
-                ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
-                ->select(
-                    'payments.payment_date as date',
-                    DB::raw("CONCAT('Paiement facture ', invoices.number) as description"),
-                    DB::raw('0 as debit'),
-                    'payments.amount as credit',
-                    DB::raw('-payments.amount as amount')
-                )
-                ->where('invoices.partner_id', $this->id)
-        )->orderBy('date');
+        // 1. Préparation de la requête des Factures (Débit)
+        $invoices = DB::table('invoices')
+            ->select(
+                'date',
+                DB::raw("CONCAT('Facture ', number) as description"),
+                'total as debit',
+                DB::raw('0 as credit')
+            )
+            ->where('partner_id', $this->id)
+            ->whereNotIn('status', ['draft', 'cancelled']);
+
+        // 2. Préparation de la requête des Paiements (Crédit)
+        $payments = DB::table('payments')
+            ->join('invoices', 'payments.invoice_id', '=', 'invoices.id')
+            ->select(
+                'payments.payment_date as date',
+                DB::raw("CONCAT('Paiement facture ', invoices.number) as description"),
+                DB::raw('0 as debit'),
+                'payments.amount as credit'
+            )
+            ->where('invoices.partner_id', $this->id);
+
+        // 3. Union des deux et filtres optionnels
+        // On crée une requête de base pour pouvoir appliquer les filtres globalement
+        $query = $invoices->unionAll($payments);
+
+        // Note: Pour filtrer sur une UNION en SQL, il est parfois préférable 
+        // d'encapsuler, mais ici on peut filtrer avant l'union ou via une subquery
+        
+        $results = DB::table(DB::raw("({$query->toSql()}) as combined"))
+            ->mergeBindings($query) // Très important pour conserver les IDs et statuts
+            ->orderBy('date', 'asc');
 
         if ($startDate) {
-            $query->where('date', '>=', $startDate);
+            $results->where('date', '>=', $startDate);
         }
         if ($endDate) {
-            $query->where('date', '<=', $endDate);
+            $results->where('date', '<=', $endDate);
         }
 
-        $lines = $query->get();
+        $lines = $results->get();
+        
+        // 4. Calcul du solde progressif
         $balance = 0;
-        $result = [];
-        foreach ($lines as $line) {
+        return $lines->map(function ($line) use (&$balance) {
             $balance += ($line->debit - $line->credit);
-            $result[] = [
+            return [
                 'date' => $line->date,
                 'description' => $line->description,
-                'debit' => $line->debit,
-                'credit' => $line->credit,
-                'balance' => $balance,
+                'debit' => (float) $line->debit,
+                'credit' => (float) $line->credit,
+                'balance' => (float) $balance,
             ];
-        }
-        return $result;
+        })->toArray();
     }
 
 }

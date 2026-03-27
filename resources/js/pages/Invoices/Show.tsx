@@ -31,7 +31,7 @@ interface Payment {
 }
 
 interface Invoice {
-    can_add_payment: import("react/jsx-runtime").JSX.Element;
+    can_add_payment: boolean;
     id: number;
     number: string;
     customer_name: string;
@@ -44,7 +44,7 @@ interface Invoice {
     tax_amount: number;
     total: number;
     paid_amount: number;
-    remaining: number;
+    remaining_amount: number;
     status: 'draft' | 'sent'  | 'cancelled';
     payment_status: 'unpaid' | 'partial' | 'paid';
     items: InvoiceItem[];
@@ -84,7 +84,7 @@ export default function InvoiceShow({ invoice, partner, flash }: Props) {
 
     const [showPaymentModal, setShowPaymentModal] = useState(false);
     const [paymentForm, setPaymentForm] = useState({
-        amount: invoice.remaining,
+        amount: invoice.remaining_amount,
         payment_date: new Date().toISOString().split('T')[0],
         method: 'Orange Money',
         reference: '',
@@ -241,7 +241,7 @@ export default function InvoiceShow({ invoice, partner, flash }: Props) {
                                         </div>
                                         <div>
                                             <p className="text-xs text-stone-500">Reste à payer</p>
-                                            <p className="text-xl font-bold text-amber-600">{formatCurrency(invoice.remaining)}</p>
+                                            <p className="text-xl font-bold text-amber-600">{formatCurrency(invoice.remaining_amount)}</p>
                                         </div>
                                         <div>
                                             <p className="text-xs text-stone-500">Échéance</p>
@@ -360,13 +360,13 @@ function AddPaymentModal({ invoice, form, setForm, onSubmit, onClose }: any) {
                             type="number"
                             step="0.01"
                             min="1"
-                            max={invoice.remaining}
+                            max={invoice.remaining_amount}
                             value={form.amount}
                             onChange={(e) => setForm({...form, amount: parseFloat(e.target.value)})}
                             className="w-full px-3.5 py-2 border border-stone-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-amber-400"
                             required
                         />
-                        <p className="text-xs text-stone-500 mt-1">Reste dû : {formatCurrency(invoice.remaining)}</p>
+                        <p className="text-xs text-stone-500 mt-1">Reste dû : {formatCurrency(invoice.remaining_amount)}</p>
                     </div>
                     <div>
                         <label className="block text-xs font-medium text-stone-600 mb-1.5">Date de paiement</label>
