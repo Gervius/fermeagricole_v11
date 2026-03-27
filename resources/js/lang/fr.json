@@ -1,0 +1,43 @@
+{
+  "dashboard": {
+    "title": "Tableau de bord"
+  },
+  "flocks": {
+    "title": "Lots de poules",
+    "create": "Nouveau lot",
+    "edit": "Modifier le lot"
+  },
+  "recipes": {
+    "title": "Recettes d'aliments",
+    "create": "Nouvelle recette",
+    "edit": "Modifier la recette"
+  },
+  "invoices": {
+    "title": "Facturation Unifiée",
+    "create": "Nouvelle Facture"
+  },
+  "productions": {
+    "title": "Productions",
+    "create": "Nouvelle production"
+  },
+  "reports": {
+    "title": "Révision Comptable",
+    "balance": "Balance Générale"
+  },
+  "common": {
+    "save": "Enregistrer",
+    "cancel": "Annuler",
+    "edit": "Modifier",
+    "delete": "Supprimer",
+    "submit": "Soumettre pour approbation",
+    "approve": "Approuver",
+    "reject": "Rejeter",
+    "actions": "Actions",
+    "status": "Statut",
+    "date": "Date"
+  },
+  "errors": {
+    "required": "Ce champ est requis",
+    "invalid_format": "Format invalide"
+  }
+}
