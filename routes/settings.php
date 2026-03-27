@@ -22,3 +22,8 @@ Route::middleware(['auth', 'verified'])->group(function () {
 
     Route::inertia('settings/appearance', 'settings/appearance')->name('appearance.edit');
 });
+
+Route::middleware(['auth', 'verified'])->group(function () {
+    Route::get('/settings/general', [\App\Http\Controllers\SettingController::class, 'index'])->name('settings.index');
+    Route::post('/settings/general', [\App\Http\Controllers\SettingController::class, 'update'])->name('settings.update');
+});
