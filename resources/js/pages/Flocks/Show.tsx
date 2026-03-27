@@ -113,7 +113,7 @@ const [rejectionReason, setRejectionReason] = useState('');
   useEffect(() => {
     if (flash?.success) addToast({ message: String(flash.success), type: 'success' });
     if (flash?.error) addToast({ message: String(flash.error), type: 'error' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+
   }, []);
 
 // ── Handlers ────────────────────────────────
