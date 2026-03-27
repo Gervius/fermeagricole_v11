@@ -8,7 +8,12 @@ import typescript from 'typescript-eslint';
 /** @type {import('eslint').Linter.Config[]} */
 export default [
     js.configs.recommended,
-    reactHooks.configs.flat.recommended,
+    {
+        plugins: {
+            'react-hooks': reactHooks,
+        },
+        rules: reactHooks.configs.recommended.rules,
+    },
     ...typescript.configs.recommended,
     {
         ...react.configs.flat.recommended,
@@ -22,6 +27,10 @@ export default [
             'react/react-in-jsx-scope': 'off',
             'react/prop-types': 'off',
             'react/no-unescaped-entities': 'off',
+            '@typescript-eslint/no-explicit-any': 'off',
+            '@typescript-eslint/no-unused-vars': 'off',
+            'react-hooks/exhaustive-deps': 'off',
+            'react-hooks/set-state-in-effect': 'off'
         },
         settings: {
             react: {

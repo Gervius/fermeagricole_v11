@@ -24,12 +24,12 @@ export function useToasts(): ToastContextValue {
         // Provide no-op implementations to prevent runtime errors and log a warning.
         return {
             addToast: (t) => {
-                // eslint-disable-next-line no-console
+
                 console.warn('[ToastProvider] addToast called without provider. Message:', t?.message);
                 return 'noop';
             },
             removeToast: (id: string) => {
-                // eslint-disable-next-line no-console
+
                 console.warn('[ToastProvider] removeToast called without provider. id:', id);
             },
         } as ToastContextValue;

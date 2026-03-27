@@ -188,7 +188,7 @@ export default function FlockManagement({flocks, buildings, filters, flash, reci
             const msg = Object.entries(errors).map(([k, v]) => Array.isArray(v) ? v.join(' ') : String(v)).join(' ');
             addToast({ message: msg, type: 'error' });
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
+
     }, []);
 
     // Recherche / filtres locaux (soumis via Inertia GET)
