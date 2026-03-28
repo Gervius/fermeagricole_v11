@@ -15,8 +15,21 @@ class RecipeController extends Controller
     
     public function index()
     {
-        $recipes = Recipe::with('unit')->paginate(15);
-        return Inertia::render('Recipes/Index', ['recipes' => $recipes]);
+        $recipes = Recipe::with(['ingredients', 'unit'])->get();
+        $rawMaterials = \App\Models\Ingredient::with('unit')->get()->map(function($ing) {
+            return [
+                'id' => $ing->id,
+                'name' => $ing->name,
+                'stock_quantity' => $ing->stock_quantity ?? 0,
+                'unit_name' => $ing->unit ? $ing->unit->symbol : '',
+                'pmp' => $ing->pmp ?? 0,
+            ];
+        });
+
+        return Inertia::render('Recipes/Index', [
+            'recipes' => $recipes,
+            'rawMaterials' => $rawMaterials
+        ]);
     }
 
     public function create()
