@@ -21,22 +21,25 @@ class FeedProductionController extends Controller
     use AuthorizesRequests;
     public function index(Request $request)
     {
-        $productions = FeedProduction::with(['recipe', 'unit', 'creator', 'approver'])
+        $productions = FeedProduction::with(['recipe.ingredients', 'unit', 'creator', 'approver'])
             ->when($request->status, fn($q, $status) => $q->where('status', $status))
             ->when($request->recipe_id, fn($q, $id) => $q->where('recipe_id', $id))
             ->orderBy('created_at', 'desc')
-            ->paginate(15)
-            ->through(fn($p) => [
+            ->get()
+            ->map(fn($p) => [
                 'id' => $p->id,
-                'recipe' => $p->recipe->name,
-                'quantity' => $p->quantity_produced,
-                'unit' => $p->unit->symbol,
-                'production_date' => $p->production_date->format('d/m/Y'),
+                'recipeId' => $p->recipe_id,
+                'recipe_name' => $p->recipe->name ?? 'Recette supprimée',
+                'batchMultiplier' => $p->quantity_produced / max(1, $p->recipe->yield_quantity ?? 1),
+                'totalOutput' => $p->quantity_produced,
+                'date' => $p->production_date->format('Y-m-d'),
                 'status' => $p->status,
-                'created_by' => $p->creator->name,
-                'created_at' => $p->created_at->format('d/m/Y H:i'),
+                'notes' => $p->notes,
+                'created_by' => $p->creator->name ?? 'Inconnu',
+                'created_at' => $p->created_at->toIso8601String(),
                 'approved_by' => $p->approver?->name,
-                'approved_at' => $p->approved_at?->format('d/m/Y H:i'),
+                'approved_at' => $p->approved_at?->toIso8601String(),
+                'rejectionReason' => $p->rejection_reason,
                 'can_edit' => auth()->user()->can('update', $p),
                 'can_delete' => auth()->user()->can('delete', $p),
                 'can_submit' => auth()->user()->can('submit', $p),
