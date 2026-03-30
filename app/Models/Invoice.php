@@ -17,7 +17,7 @@ class Invoice extends Model
     protected $fillable = [
         'number', 'type', 'customer_name', 'partner_id', 'date', 'due_date',
         'subtotal', 'tax_rate', 'tax_amount', 'total',
-        'status', 'payment_status', 'notes', 'created_by', 'approved_by'
+        'status', 'workflow_step_id', 'payment_status', 'notes', 'created_by', 'approved_by'
     ];
 
     protected $casts = [
@@ -47,6 +47,21 @@ class Invoice extends Model
         return $this->belongsTo(User::class, 'approved_by');
     }
 
+    public function workflowStep(): BelongsTo
+    {
+        return $this->belongsTo(WorkflowStep::class);
+    }
+
+    public function approvals(): HasMany
+    {
+        return $this->hasMany(InvoiceApproval::class);
+    }
+
+    public function auditLogs(): HasMany
+    {
+        return $this->hasMany(InvoiceAuditLog::class);
+    }
+
     // Calcul du reste à payer pour l'UI
     public function getRemainingAmountAttribute(): float
     {
@@ -60,7 +75,7 @@ class Invoice extends Model
 
     public function isApproved(): bool
     {
-        return $this->status === 'sent';
+        return in_array($this->status, ['approved', 'issued', 'paid']);
     }
 
     public function getCanAddPaymentAttribute(): bool

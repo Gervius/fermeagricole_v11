@@ -8,7 +8,6 @@ uses(\Illuminate\Foundation\Testing\RefreshDatabase::class);
 test('password update page is displayed', function () {
     $user = User::factory()->create();
 
-    // There is no explicit password edit route, it's combined in settings
     $response = $this
         ->actingAs($user)
         ->get(route('security.edit'));

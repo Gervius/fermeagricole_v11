@@ -24,34 +24,46 @@ class InvoicePolicy
 
     public function update(User $user, Invoice $invoice): bool
     {
-        // Seulement si brouillon et créateur ou admin
         return $invoice->status === 'draft' 
             && $user->can('edit invoices') 
-            && ($user->id === $invoice->created_by || $user->hasRole('Admin'));
+            && ($user->id === $invoice->created_by || $user->hasRole('admin'));
     }
 
     public function delete(User $user, Invoice $invoice): bool
     {
         return $invoice->status === 'draft' 
             && $user->can('delete invoices') 
-            && ($user->id === $invoice->created_by || $user->hasRole('Admin'));
+            && ($user->id === $invoice->created_by || $user->hasRole('admin'));
+    }
+
+    public function submit(User $user, Invoice $invoice): bool
+    {
+        return $invoice->status === 'draft'
+            && ($user->id === $invoice->created_by || $user->hasRole('admin'));
     }
 
     public function approve(User $user, Invoice $invoice): bool
     {
-        return $invoice->status === 'draft' && $user->can('approve invoices');
+        if ($invoice->status !== 'pending_approval' || !$invoice->workflowStep) {
+            return false;
+        }
+
+        $requiredRoleId = $invoice->workflowStep->role_id;
+        $roleName = \Spatie\Permission\Models\Role::find($requiredRoleId)?->name;
+
+        return $roleName && ($user->hasRole($roleName) || $user->hasRole('admin'));
     }
 
     public function cancel(User $user, Invoice $invoice): bool
     {
-        return $invoice->status === 'sent' 
-            && $invoice->paid_amount == 0 
+        return !in_array($invoice->status, ['cancelled', 'paid'])
             && $user->can('cancel invoices');
     }
 
-
     public function addPayment(User $user, Invoice $invoice): bool
     {
-        return $invoice->payment_status !== 'paid' && $user->can('add payments');
+        return in_array($invoice->status, ['issued', 'approved'])
+            && $invoice->payment_status !== 'paid'
+            && $user->can('add payments');
     }
 }

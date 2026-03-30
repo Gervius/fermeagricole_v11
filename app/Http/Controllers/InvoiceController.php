@@ -10,19 +10,28 @@ use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Illuminate\Support\Facades\DB;
 use Barryvdh\DomPDF\Facade\Pdf;
-use App\Services\AccountingService;
+use App\Services\InvoiceService;
+use App\Services\ApprovalService;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 
 class InvoiceController extends Controller
 {
     use AuthorizesRequests;
+
+    protected InvoiceService $invoiceService;
+    protected ApprovalService $approvalService;
+
+    public function __construct(InvoiceService $invoiceService, ApprovalService $approvalService)
+    {
+        $this->invoiceService = $invoiceService;
+        $this->approvalService = $approvalService;
+    }
     /**
      * Liste des factures avec filtres de paiement.
      */
-    // Dans InvoiceController@index
     public function index(Request $request)
     {
-        $query = Invoice::with(['creator', 'items', 'partner'])
+        $query = Invoice::with(['creator', 'items', 'partner', 'workflowStep'])
             ->when($request->search, function ($q, $search) {
                 $q->where('number', 'like', "%{$search}%")
                 ->orWhere('customer_name', 'like', "%{$search}%");
@@ -40,6 +49,7 @@ class InvoiceController extends Controller
             'paid_amount' => $invoice->payments()->sum('amount'),
             'remaining' => $invoice->total - $invoice->payments()->sum('amount'),
             'status' => $invoice->status,
+            'workflow_step' => $invoice->workflowStep?->name,
             'payment_status' => $invoice->payment_status,
             'items_count' => $invoice->items->count(),
             'items_types' => $invoice->items->pluck('itemable_type')->map(fn($type) => 
@@ -96,8 +106,7 @@ class InvoiceController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'type' => 'required|in:sale,purchase', // Nouveau champ requis
-            'number' => 'required|unique:invoices',
+            'type' => 'required|in:sale,purchase',
             'partner_id' => 'required|exists:partners,id',
             'date' => 'required|date',
             'items' => 'required|array|min:1',
@@ -110,65 +119,88 @@ class InvoiceController extends Controller
             $subtotal = collect($validated['items'])->sum(fn($i) => $i['quantity'] * $i['unit_price']);
             $partner = Partner::findOrFail($validated['partner_id']);
 
-            $invoice = Invoice::create([
-                'type' => $validated['type'], // On enregistre le type (sale/purchase)
-                'number' => $validated['number'],
+            $invoice = $this->invoiceService->createDraft([
+                'type' => $validated['type'],
                 'partner_id' => $validated['partner_id'],
                 'customer_name' => $partner->name,
                 'date' => $validated['date'],
                 'subtotal' => $subtotal,
                 'total' => $subtotal,
-                'status' => 'draft',
                 'payment_status' => 'unpaid',
-                'created_by' => auth()->id(),
-            ]);
+            ], auth()->id());
 
             foreach ($validated['items'] as $item) {
                 $invoice->items()->create($item);
             }
         });
 
-        return redirect()->route('invoicesIndex')->with('success', 'Facture créée avec succès.');
+        return redirect()->route('invoicesIndex')->with('success', 'Facture brouillon créée avec succès.');
     }
 
-    /**
-     * Validation de la facture (déclenche l'Observer pour la Compta et les Stocks).
-     */
+    public function submit(Invoice $invoice)
+    {
+        $this->authorize('submit', $invoice);
+
+        DB::transaction(function () use ($invoice) {
+            $this->approvalService->submit($invoice);
+        });
+
+        return back()->with('success', 'Facture soumise pour approbation.');
+    }
+
     public function approve(Invoice $invoice)
     {
         $this->authorize('approve', $invoice);
 
-        
-        
         DB::transaction(function () use ($invoice) {
-            foreach ($invoice->items as $item) {
-                if ($item->itemable_type === Flock::class) {
-                    $flock = Flock::find($item->itemable_id);
-                    if (!$flock || !$flock->canSell($item->quantity)) {
-                        throw new \Exception("Stock insuffisant pour le lot {$flock->name}. Disponible : {$flock->calculated_quantity}, demandé : {$item->quantity}");
+            $isLastStep = !\App\Models\WorkflowStep::where('is_active', true)
+                ->where('order', '>', $invoice->workflowStep->order)
+                ->exists();
+
+            if ($isLastStep) {
+                foreach ($invoice->items as $item) {
+                    if ($item->itemable_type === Flock::class) {
+                        $flock = Flock::find($item->itemable_id);
+                        if (!$flock || !$flock->canSell($item->quantity)) {
+                            throw new \Exception("Stock insuffisant pour le lot {$flock->name}. Disponible : {$flock->calculated_quantity}, demandé : {$item->quantity}");
+                        }
                     }
                 }
             }
-            $invoice->update([
-                'status' => 'sent',
-                'approved_by' => auth()->id(),
-                'approved_at' => now(),
-            ]);
-            // L'observer InvoiceObserver va s'exécuter et créer les écritures/mouvements
-            // Comme on est dans une transaction, si l'observer échoue, tout est rollback.
+
+            $this->approvalService->approve($invoice, auth()->id());
+
+            $invoice->refresh();
+            if ($invoice->status === 'approved') {
+                $this->invoiceService->issueInvoice($invoice);
+            }
         });
 
         return back()->with('success', 'Facture approuvée.');
     }
 
+    public function reject(Request $request, Invoice $invoice)
+    {
+        $this->authorize('approve', $invoice);
+
+        $request->validate(['comments' => 'required|string|min:5']);
+
+        DB::transaction(function () use ($invoice, $request) {
+            $this->approvalService->reject($invoice, auth()->id(), $request->comments);
+        });
+
+        return back()->with('warning', 'Facture rejetée et retournée au brouillon.');
+    }
+
     public function show(Invoice $invoice)
     {
-        $invoice->load(['items', 'payments', 'creator', 'approver', 'partner']);
+        $invoice->load(['items', 'payments', 'creator', 'approver', 'partner', 'workflowStep', 'approvals.user', 'auditLogs.user']);
         $partner = $invoice->partner;
         $statement = $partner ? $partner->getStatement() : [];
 
         return Inertia::render('Invoices/Show', [
             'invoice' => array_merge($invoice->toArray(), [
+                'can_submit' => auth()->user()->can('submit', $invoice),
                 'can_approve' => auth()->user()->can('approve', $invoice),
                 'can_cancel' => auth()->user()->can('cancel', $invoice),
                 'can_add_payment' => $invoice->can_add_payment,
@@ -221,11 +253,8 @@ class InvoiceController extends Controller
         $request->validate(['reason' => 'required|string|min:10']);
 
         DB::transaction(function () use ($invoice, $request) {
-            $invoice->update([
-                'status' => 'cancelled',
-                'notes' => $invoice->notes . "\n[ANNULATION] Motif : " . $request->reason
-            ]);
-            // L'InvoiceObserver gérera l'annulation
+            $invoice->notes = $invoice->notes . "\n[ANNULATION] Motif : " . $request->reason;
+            $this->invoiceService->cancelInvoice($invoice);
         });
 
         return redirect()->route('invoicesIndex')->with('warning', 'Facture annulée.');

@@ -246,7 +246,9 @@ Route::middleware(['auth', 'verified'])->group(function () {
     Route::get('/stock-movements/export/excel', [StockMouvementController::class, 'exportExcel'])->name('stockMovements.export');
     Route::get('/journal-vouchers/export/excel', [JournalVoucherController::class, 'exportExcel'])->name('journalVouchers.export');
 
+    Route::post('/invoices/{invoice}/submit', [InvoiceController::class, 'submit'])->name('invoicesSubmit');
     Route::post('/invoices/{invoice}/approve', [InvoiceController::class, 'approve'])->name('invoicesApprove');
+    Route::post('/invoices/{invoice}/reject', [InvoiceController::class, 'reject'])->name('invoicesReject');
     Route::post('/invoices/{invoice}/add-payment', [InvoiceController::class, 'addPayment'])->name('invoicesAddPayment');
     Route::post('/invoices/{invoice}/cancel', [InvoiceController::class, 'cancel'])->name('invoicesCancel');
     //Route::post('/invoices/{invoice}/whatsapp', [InvoiceController::class, 'sendWhatsApp'])->name('invoicesWhatsapp');
