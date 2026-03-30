@@ -50,11 +50,33 @@ interface Invoice {
     items: InvoiceItem[];
     payments: Payment[];
     notes?: string;
+    status: 'draft' | 'pending_approval' | 'approved' | 'rejected' | 'issued' | 'paid' | 'cancelled';
+    payment_status: 'unpaid' | 'partial' | 'paid';
+    workflowStep?: { name: string };
+    items: InvoiceItem[];
+    payments: Payment[];
+    notes?: string;
     created_by: string;
     created_at: string;
+    can_submit?: boolean;
     can_approve?: boolean;
     can_cancel?: boolean;
+    auditLogs?: any[];
+    approvals?: any[];
 }
+
+const getStatusBadge = (status: string, workflowStepName?: string) => {
+    switch (status) {
+        case 'draft': return <span className="px-2.5 py-1 text-xs font-medium bg-stone-100 text-stone-600 rounded-full border border-stone-200">Brouillon</span>;
+        case 'pending_approval': return <span className="px-2.5 py-1 text-xs font-medium bg-blue-100 text-blue-700 rounded-full border border-blue-200">En attente : {workflowStepName}</span>;
+        case 'approved': return <span className="px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200">Approuvée</span>;
+        case 'rejected': return <span className="px-2.5 py-1 text-xs font-medium bg-red-100 text-red-700 rounded-full border border-red-200">Rejetée</span>;
+        case 'issued': return <span className="px-2.5 py-1 text-xs font-medium bg-indigo-100 text-indigo-700 rounded-full border border-indigo-200">Émise</span>;
+        case 'paid': return <span className="px-2.5 py-1 text-xs font-medium bg-emerald-100 text-emerald-700 rounded-full border border-emerald-200">Payée</span>;
+        case 'cancelled': return <span className="px-2.5 py-1 text-xs font-medium bg-red-100 text-red-700 rounded-full border border-red-200">Annulée</span>;
+        default: return <span className="px-2.5 py-1 text-xs font-medium bg-stone-100 text-stone-600 rounded-full border border-stone-200">{status}</span>;
+    }
+};
 
 interface PartnerStatementLine {
     date: string;
@@ -174,13 +196,40 @@ export default function InvoiceShow({ invoice, partner, flash }: Props) {
                             >
                                 <Download className="w-4 h-4" /> PDF
                             </button>
-                            {invoice.status === 'draft' && invoice.can_approve && (
+                            {invoice.status === 'draft' && invoice.can_submit && (
                                 <button
-                                    onClick={handleApprove}
-                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition-colors"
+                                    onClick={() => {
+                                        if (confirm('Soumettre cette facture pour approbation ?')) {
+                                            router.post(`/invoices/${invoice.id}/submit`);
+                                        }
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-medium rounded-lg transition-colors"
                                 >
-                                    <CheckCircle className="w-4 h-4" /> Approuver
+                                    <CheckCircle className="w-4 h-4" /> Soumettre
                                 </button>
+                            )}
+                            {invoice.status === 'pending_approval' && invoice.can_approve && (
+                                <>
+                                    <button
+                                        onClick={handleApprove}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-medium rounded-lg transition-colors"
+                                    >
+                                        <CheckCircle className="w-4 h-4" /> Approuver
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            const comments = prompt('Motif du rejet ?');
+                                            if (comments && comments.length >= 5) {
+                                                router.post(`/invoices/${invoice.id}/reject`, { comments });
+                                            } else if(comments) {
+                                                alert("Le commentaire doit faire au moins 5 caractères.");
+                                            }
+                                        }}
+                                        className="flex items-center gap-1.5 px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white text-xs font-medium rounded-lg transition-colors"
+                                    >
+                                        <XCircle className="w-4 h-4" /> Rejeter
+                                    </button>
+                                </>
                             )}
                             {invoice.can_add_payment && (
                                 <button
@@ -190,7 +239,19 @@ export default function InvoiceShow({ invoice, partner, flash }: Props) {
                                     <DollarSign className="w-4 h-4" /> Ajouter un paiement
                                 </button>
                             )}
-
+                            {invoice.status !== 'cancelled' && invoice.status !== 'paid' && invoice.can_cancel && (
+                                <button
+                                    onClick={() => {
+                                        const reason = prompt('Motif de l\'annulation ? (min 10 caractères)');
+                                        if (reason && reason.length >= 10) {
+                                            router.post(`/invoices/${invoice.id}/cancel`, { reason });
+                                        }
+                                    }}
+                                    className="flex items-center gap-1.5 px-3 py-1.5 bg-white border border-red-200 text-red-600 text-xs font-medium rounded-lg hover:bg-red-50 transition-colors shadow-sm"
+                                >
+                                    <XCircle className="w-4 h-4" /> Annuler
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -213,6 +274,13 @@ export default function InvoiceShow({ invoice, partner, flash }: Props) {
                                     {activeTab === 'statement' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full" />}
                                 </button>
                             )}
+                            <button
+                                onClick={() => setActiveTab('history')}
+                                className={`pb-2 text-sm font-medium transition-colors relative ${activeTab === 'history' ? 'text-indigo-600' : 'text-stone-500 hover:text-stone-700'}`}
+                            >
+                                Historique & Audit
+                                {activeTab === 'history' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-indigo-600 rounded-t-full" />}
+                            </button>
                         </div>
                     </div>
 
@@ -326,6 +394,32 @@ export default function InvoiceShow({ invoice, partner, flash }: Props) {
 
                         {activeTab === 'statement' && partner && (
                             <ClientStatement partner={partner} />
+                        )}
+
+                        {activeTab === 'history' && (
+                            <div className="space-y-6">
+                                <h3 className="text-sm font-medium text-stone-700">Historique des actions</h3>
+                                {invoice.auditLogs && invoice.auditLogs.length > 0 ? (
+                                    <div className="space-y-4 border-l-2 border-stone-200 ml-3">
+                                        {invoice.auditLogs.map((log: any) => (
+                                            <div key={log.id} className="relative pl-6">
+                                                <div className="absolute w-3 h-3 bg-indigo-600 rounded-full -left-[7px] top-1.5 ring-4 ring-white" />
+                                                <div className="bg-stone-50 p-3 rounded-lg text-sm">
+                                                    <div className="flex justify-between items-center mb-1">
+                                                        <span className="font-semibold text-stone-900 capitalize">{log.action}</span>
+                                                        <span className="text-xs text-stone-500">{format(parseISO(log.created_at), 'dd/MM/yyyy HH:mm')}</span>
+                                                    </div>
+                                                    <div className="text-stone-600 text-xs">
+                                                        Par {log.user?.name || 'Système'}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                ) : (
+                                    <p className="text-sm text-stone-500">Aucun historique disponible.</p>
+                                )}
+                            </div>
                         )}
                     </div>
                 </div>

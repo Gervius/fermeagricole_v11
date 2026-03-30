@@ -21,5 +21,5 @@ test('two factor settings page can be rendered', function () {
     $this->actingAs($user)
         ->withSession(['auth.password_confirmed_at' => time()])
         ->get(route('security.edit'))
-        ->assertOk(); // Simplify assert due to component change in inertia refactor
+        ->assertOk();
 });
